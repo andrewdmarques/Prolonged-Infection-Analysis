@@ -15,483 +15,8 @@ library('ggridges')
 # Define Functions
 ################################################################################
 
-# Function to make a dataframe that is a x b into one that is a*b long (square data frame to list data frame).
-linearize <- function(data_frame){
-  r <- rownames(data_frame)
-  c <- colnames(data_frame)
-  
-  # Make a blank data frame.
-  col <- c('dim1','dim2', 'value')
-  linear <- data.frame(matrix(NA, nrow = length(r)*length(c), ncol = length(col)))
-  colnames(linear ) <- col
-  
-  x <- 1
-  y <- 1
-  for(i in 1:length(linear$dim1)){
-    linear$dim1[i] <- r[x]
-    linear$dim2[i] <- c[y]
-    linear$value[i] <- data_frame[x,y]
-    y <- y + 1
-    if(y > length(c)){
-      y <- 1
-      x <- x + 1
-    }
-  }
-  return(linear)
-}
 
-# Check if the position for a given sample had coverage.
-check_coverage <- function(mut5,mut3_no_cov,sam1){
-  mut_t <- mut5
-  col_t <- colnames(mut5) 
-  # mut3_no_cov <- mut3_no_cov[1:0, ] # This will remove the zero coverage for the plot.
-  
-  # Use lookup table to assign the name for the no coverage data frame.
-  # Assign the data to be found in the table.
-  lookup_tab <- sam1$name
-  # Give the data names.
-  names(lookup_tab) <- sam1$VSP
-  # Search a vector of names and outputs the associated data.
-  mut3_no_cov$name <- lookup_tab[mut3_no_cov$VSP]
-  
-  # Determine what positions are used in the mutation table
-  # Split each value in "dim1" by the underscore character
-  parts <- strsplit(mut_t$dim1, "_")
-  # Extract the last element of each list and remove all non-numeric characters
-  mut_t$alias <- paste0(mut_t$dim2,'_',as.character(sapply(parts, function(x) gsub("[^0-9]", "", x[[length(x)]]))))
-  
-  # Use a lookup table to determine if the position had no coverage.
-  mut3_no_cov$alias <- paste0(mut3_no_cov$name,'_',as.character(mut3_no_cov$POS))
-  # Assign the data to be found in the table.
-  lookup_cov <- rep(-1,length(mut3_no_cov$alias))
-  # Give the data names.
-  names(lookup_cov) <- mut3_no_cov$alias
-  # Search a vector of names and outputs the associated data.
-  mut3_no_cov$name <- lookup_cov[mut3_no_cov$VSP]
-  mut_t$temp <- lookup_cov[mut_t$alias]
-  # Check which rows have NA in the "temp" column
-  na_rows <- is.na(mut_t$temp)
-  # Overwrite the values in "value" with the values in "temp" for rows where "temp" is not NA
-  mut_t$value <- ifelse(!na_rows, mut_t$temp, mut_t$value)
-  
-  # Curate the data so that it is the same format that was put in.
-  mut_t <- mut_t[ , which(names(mut_t) %in% col_t)]
-}
-
-# Function to get a dataframe that has the sample type and numbers for converting in other functions.
-get_type_num <- function(met2){
-  samp_type_unique <- unique(met2$sample_type_tube)
-  # Make a blank data frame
-  col <- c('sample_type', 'num')
-  type_num <- data.frame(matrix(NA, nrow = length(samp_type_unique), ncol = length(col)))
-  colnames(type_num) <- col
-  type_num$sample_type <- samp_type_unique
-  type_num$num <- seq(1,length(samp_type_unique))
-  return(type_num)
-}
-
-# Function that retrieves the sample type and adds it to the data frame to be plotted.
-get_sample_type <- function(met2,mut4,mut6,sam1,type_num,prop_samp){
-  # # Go from the day data to the VSP data using a lookup table.
-  mut6$name <- paste0(mut6$group,'_',mut6$dim2)
-  # Make a lookup table to assign data to data frames more efficiently.
-  # Assign the data to be found in the table.
-  lookup_tab <- sam1$VSP
-  # Give the data names.
-  names(lookup_tab ) <- sam1$name
-  # Search a vector of names and outputs the associated data.
-  mut6$VSP <- lookup_tab[mut6$name]
-  
-  # Use a lookup table to get the sample type for each of the VSP
-  samp <- unique(mut6$name)
-  # Get xx number of rows to display the sampe data, for example, 2% would be .02
-  xx <- max(1,round(length(mut4[,1])*prop_samp)) # Doing the max here makes sure that there is at least a value of 1
-  samp_type_unique <- unique(met2$sample_type_tube)
-  
-  # Record the factors and temprarily make them characters.
-  df_levels <- levels(mut6$dim1)
-  mut6$dim1 <- as.character(mut6$dim1)
-  samp_type_rep <- paste0('samp_type','-',seq(1,xx))
-  blanks <- paste0('blank-',seq(1,xx))
-  df_levels <- c(samp_type_rep,blanks,df_levels)
-  
-  # Get a conversion for the sample types.
-  # Assign the data to be found in the table.
-  lookup_num <- type_num$num
-  # Give the data names.
-  names(lookup_num) <- type_num$sample_type
-  
-  for(ii in 1:length(samp)){
-    col <- colnames(mut6)
-    temp <- data.frame(matrix(NA, nrow = xx, ncol = length(col)))
-    colnames(temp) <- col
-    temp2 <- subset(mut6, mut6$name == samp[ii])
-    samp_vsp <- temp2$VSP[1]
-    samp_type <- subset(met2,met2$VSP == samp_vsp)
-    samp_type <- samp_type$sample_type_tube[1]
-    
-    # Populate the data frame with sample types.
-    temp$dim1 <- paste0(rep('samp_type',xx),'-',seq(1,xx))
-    temp$dim2 <- temp2$dim2[1]
-    temp$group <- temp2$group[1]
-    temp$value <- (lookup_num[samp_type] + 2)*-1
-    
-    # Add the blank lines.
-    temp_b <- temp
-    temp_b$dim1 <- paste0('blank-',seq(1,xx))
-    temp_b$value <- -1
-    
-    # Add it to the existing data frame.
-    mut6 <- rbind(mut6,temp,temp_b)
-  }
-  
-  # Return the dim1 column back to a factor with the correct levels.
-  mut6$dim1 <- factor(mut6$dim1,levels = df_levels)
-  
-  
-  # Remove any columns that shouldn't be there.
-  mut6 <- mut6[ , which(names(mut6) %in% c('dim1','dim2','group','value'))]
-  return(mut6)
-}
-
-# Function to get the gradient legend for the mutation heatmap.
-get_gradient_legend <- function() {
-  # Create a dummy data frame
-  df <- data.frame(x = c(0, 1), y = c(0, 1))
-  
-  # Plot
-  plot_legend <- ggplot(df, aes(x = x, y = y)) + 
-    geom_tile(aes(fill = x), height = 1, width = 1) + 
-    scale_fill_gradientn(colors = c("lightblue", "darkblue"), 
-                         name = "iSNV Proportion", 
-                         breaks = c(0, 0.25, 0.5, 0.75, 1),
-                         labels = c("0", "0.25", "0.5", "0.75", "1"),
-                         guide = guide_colorbar(ticks = FALSE)) +  # Removing ticks
-    theme_minimal() + 
-    theme(axis.title = element_blank(),
-          axis.text = element_blank(),
-          axis.ticks = element_blank(),
-          panel.grid = element_blank(),
-          legend.position = "right",
-          legend.key.width = unit(1, "cm")) +
-    labs(x = NULL, y = NULL)
-  # Save the plot to a PDF
-  ggsave(filename = paste0(dir_data,'/', prefix,'_heatmap-legend_',suffix,'.pdf'), plot = plot_legend, device = "pdf", width = 7, height = 5)
-  
-}
-
-# Function to get the sample type legend for the mutation heatmap.
-get_legend <- function(colors, labels){
-  # Check that the inputs are of the correct length
-  if (length(colors) != length(labels)) {
-    stop("Error: the lists 'colors' and 'labels' must have the same length.")
-  }
-  
-  # Create a blank plot
-  plot <- ggplot()
-  
-  # Add a dummy layer to the plot
-  plot <- plot + 
-    geom_point(aes(x = 1, y = 1, color = labels, fill = labels), 
-               size = 10, shape = 15, stroke = 1)
-  
-  # Add a legend to the plot
-  plot <- plot + 
-    scale_color_manual(values = colors, name = "Sample Type", labels = labels) +
-    scale_fill_manual(values = colors, name = "Sample Type", labels = labels)
-  
-  # Remove the axis labels and tick marks
-  plot <- plot + 
-    theme(axis.title = element_blank(), 
-          axis.text = element_blank(), 
-          axis.ticks = element_blank())
-  
-  plot
-  return(plot)
-}
-
-
-# Function to make the heatmap.
-get_heatmap <- function(met0,mut1,prefix,subj_all,dir_data){
-  # get_heatmap(met0,mut1,prefix3,subj3,dir_data)
-  # Make a blank that all the plots are saved to.
-  plot_list <- list()
-  
-  # Iterate through each of the subjects.
-  for(ss in 1:length(subj_all)){
-    # Record how long it takes for each sample. 
-    start_time_seconds <- as.numeric(Sys.time())
-    
-    subj <- subj_all[ss]
-    print(paste0('Beginning ', subj),quote = F)
-    
-    # Look at only the samples are included in the project.
-    # met2 <- subset(met1, sample_included_in_study %in% c("yes", "poor coverage"))
-    met2 <- subset(met0,met0$study_id %in% subj)
-    mut2 <- subset(mut1, mut1$VSP %in% met2$VSP)
-    
-    # Extract the mutations that are present.
-    mut3 <- get_mutation(mut2)
-    dir.create(paste0(dir_data,'/'), showWarnings = FALSE)
-    write.csv(mut3,paste0(dir_data,'/',prefix,'_minor-variant-examples_',suffix,'.csv'),row.names = F)
-    
-    # Separate the positions with no coverage from those with coverage.
-    mut3_no_cov <- subset(mut3,mut3$ALT == 'N')
-    mut3 <- subset(mut3,mut3$ALT != 'N')
-    
-    # Get the sample data frame set up.
-    col <- c('VSP', 'passage','replicate','host','type')
-    sam1 <- data.frame(matrix(NA, nrow = length(unique(met2$VSP)), ncol = length(col)))
-    colnames(sam1) <- col
-    sam1$VSP <- met2$VSP
-    sam1$passage <- met2$days_since_symptom_onset
-    sam1$host <- met2$study_id
-    sam1 <- sam1[order(sam1$passage, decreasing = FALSE),]
-    
-    # Format the sample sheet.
-    # sam1$name <- paste0(sam1$VSP,'_', sam1$host,'_Day ',as.character(sprintf("%02d",as.numeric(sam1$passage))))
-    
-    # Combine the values in the "host" and "passage" columns XXX
-    sam1$name <- paste(sam1$host,'_',sam1$VSP,' Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
-    sam1$name <- paste(sam1$host,'_','Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
-    
-    # Add suffixes to the "name" column for duplicate rows
-    sam1$name <- ave(sam1$name, sam1$name, FUN = function(x) {
-      if(length(x) > 1) {
-        suffix <- paste(".", letters[1:length(x)], sep="")
-        return(paste(x, suffix, sep=""))
-      } else {
-        return(x)
-      }
-    })
-    
-    # Populate the data frame to be plotted.
-    col <- sam1$name
-    row <- unique(mut3$mutation)
-    mut4 <- data.frame(matrix(0, nrow = length(row), ncol = length(col)))
-    colnames(mut4) <- col
-    rownames(mut4) <- row
-    for(ii in 1:length(col)){
-      for(jj in 1:length(row)){
-        t1 <- col[ii]
-        hold <- subset(sam1,sam1$name == t1)
-        t1 <- hold$VSP[1]
-        t2 <- row[jj]
-        temp <- subset(mut3,mut3$VSP == t1)
-        temp <- subset(temp,temp$mutation == t2)
-        if(length(temp$VSP > 0)){
-          mut4[jj,ii] <- temp$percentAlt[1]
-        }
-      }
-    }
-    
-    # Make columns where there is no mutation (there was no consensus sequence made) equal to -1 so it is clear that there is no coverage.
-    mut4[, apply(mut4, 2, function(x) all(x == 0))] <- -1
-    
-    # Remove the rows where the mutation proption is 1 for all timepoints.
-    mut4 <- mut4[rowSums(mut4 >= 0.90) < ncol(mut4), ]
-    
-    mut5 <- linearize(mut4)
-    
-    # Determine if the specified position for each of the samples had no coverage.
-    mut5 <- check_coverage(mut5,mut3_no_cov,sam1)
-    
-    # Specify the order of the variables, displayed in the order of positions.
-    index <- mut3[ , which(names(mut3) %in% c('POS','mutation'))]
-    index <- index[order(index$POS, decreasing = FALSE),]
-    index <- index[!duplicated(index),]
-    # index$POS[length(index$POS)-1] <- index$POS[(length(index$POS)-2)] + 2
-    # index$POS[length(index$POS)] <- index$POS[(length(index$POS)-2)] + 1
-    index <- index[order(index$POS, decreasing = TRUE),]
-    levels_factor <- index$mutation
-    mut5$dim1 <- factor(mut5$dim1,levels = levels_factor)
-    
-    # Format the names correctly.
-    mut6 <- mut5
-    mut6$group <- gsub("_.*","",mut6$dim2)
-    mut6$dim2 <- gsub(".*_","",mut6$dim2)
-    
-    # # Add the sample type to the plot.
-    # type_num <- get_type_num(met2)
-    # prop_samp <- 0.02
-    # mut6 <- get_sample_type(met2,mut4,mut6,sam1,type_num,prop_samp)
-    
-    # Make the days in the mutation table a factor.
-    factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", unique(mut6$dim2), perl = TRUE))
-    factor_v <- sort(as.character(unique(mut6$dim2)))
-    factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", factor_v, perl = TRUE))
-    mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
-    mut6$dim2 <- factor(mut6$dim2,levels = factor_v)
-    # mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
-    
-    # Make the heatmap
-    p_cols <- c("#693a01","#9e5600",   "#ffd6a6","#bfaf9b",'white','lightblue', 'darkblue')
-    p_resc <- c(-5,-4,-3,-2,-1,0, 1)
-    
-    # For those plots without sample type.
-    p_cols <- c('lightblue', 'darkblue')
-    p_resc <- c(0, 1)
-    
-    # If there are no "no coverage" mutations, then just us light blue or dark blue.
-    if(min(mut6$value) < 0){
-      p_cols <- c('white','lightblue', 'darkblue')
-      p_resc <- c(-1,0, 1)
-    }
-    
-    heatmap_plot <- ggplot(data = mut6, aes(x=dim2, y=dim1)) +
-      facet_grid(~group, scales = "free") +
-      geom_tile(aes(fill = value)) + theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") +
-      xlab('') + ylab('') + labs(fill = "Proportion") + ggtitle("") +
-      scale_fill_gradientn(
-        # colours=c('grey','white', '#c2e7fc'),
-        #colours=c("#693a01","#9e5600","#ffae4f","#ffd6a6","#bfaf9b",'white','lightblue', 'darkblue'),
-        colours=p_cols,
-        # colours=c('lightblue', 'darkblue'),
-        values=scales::rescale(p_resc),
-        guide="colorbar")+
-      theme(axis.text.y=element_blank(),
-            axis.ticks.y=element_blank() 
-      )
-    
-    # Add the plot to the list
-    plot_list[[ss]] <- heatmap_plot
-    
-    # Report back the progress going through this loop.
-    end_time_seconds <- as.numeric(Sys.time())
-    print(paste0('Completed ', subj,'     Seconds: ',as.character(round(end_time_seconds - start_time_seconds),2)),quote = F)
-    print('',quote = F)
-  }
-  
-  # Save all the plots in a single PDF
-  pdf(paste0(dir_data,'/', prefix,'_mutation-heatmap_',suffix,'.pdf'), width = ceiling(ss)*1.8, height = ceiling(ss)*2)
-  gridExtra::grid.arrange(grobs = plot_list, ncol = ceiling(ss/2))
-  dev.off()
-  desired_height <- 100
-  pdf(paste0(dir_data,'/', prefix,'_mutation-heatmap-paper_',suffix,'.pdf'), width = 375/25.4, height = desired_height/25.4)  # 25.4 mm per inch
-  gridExtra::grid.arrange(grobs = plot_list, ncol = length(plot_list))
-  dev.off()
-  return(mut6)
-}
-
-# Function to get the mut6 data frame that has all the data sorted.
-get_mut6 <- function(met0,mut1,prefix,subj,dir_data){
-  
-  # prefix <- prefix3
-  # subj <- subj3
-  
-  # Look at only the samples are included in the project.
-  # met2 <- subset(met1, sample_included_in_study %in% c("yes", "poor coverage"))
-  met2 <- subset(met0,met0$study_id %in% subj)
-  mut2 <- subset(mut1, mut1$VSP %in% met2$VSP)
-  
-  # Extract the mutations that are present.
-  mut3 <- get_mutation(mut2)
-  dir.create(paste0(dir_data,'/'), showWarnings = FALSE)
-  write.csv(mut3,paste0(dir_data,'/',prefix,'_minor-variant-examples_',suffix,'.csv'),row.names = F)
-  
-  # Separate the positions with no coverage from those with coverage.
-  mut3_no_cov <- subset(mut3,mut3$ALT == 'N')
-  mut3 <- subset(mut3,mut3$ALT != 'N')
-  
-  # Get the sample data frame set up.
-  col <- c('VSP', 'passage','replicate','host','type')
-  sam1 <- data.frame(matrix(NA, nrow = length(unique(met2$VSP)), ncol = length(col)))
-  colnames(sam1) <- col
-  sam1$VSP <- met2$VSP
-  sam1$passage <- met2$days_since_symptom_onset
-  sam1$host <- met2$study_id
-  sam1 <- sam1[order(sam1$passage, decreasing = FALSE),]
-  
-  # Format the sample sheet.
-  # sam1$name <- paste0(sam1$VSP,'_', sam1$host,'_Day ',as.character(sprintf("%02d",as.numeric(sam1$passage))))
-  
-  # Combine the values in the "host" and "passage" columns XXX
-  sam1$name <- paste(sam1$host,'_',sam1$VSP,' Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
-  sam1$name <- paste(sam1$host,'_','Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
-  
-  # Add suffixes to the "name" column for duplicate rows
-  sam1$name <- ave(sam1$name, sam1$name, FUN = function(x) {
-    if(length(x) > 1) {
-      suffix <- paste(".", letters[1:length(x)], sep="")
-      return(paste(x, suffix, sep=""))
-    } else {
-      return(x)
-    }
-  })
-  
-  # Populate the data frame to be plotted.
-  col <- sam1$name
-  row <- unique(mut3$mutation)
-  mut4 <- data.frame(matrix(0, nrow = length(row), ncol = length(col)))
-  colnames(mut4) <- col
-  rownames(mut4) <- row
-  for(ii in 1:length(col)){
-    for(jj in 1:length(row)){
-      t1 <- col[ii]
-      hold <- subset(sam1,sam1$name == t1)
-      t1 <- hold$VSP[1]
-      t2 <- row[jj]
-      temp <- subset(mut3,mut3$VSP == t1)
-      temp <- subset(temp,temp$mutation == t2)
-      if(length(temp$VSP > 0)){
-        mut4[jj,ii] <- temp$percentAlt[1]
-      }
-    }
-  }
-  
-  # Make columns where there is no mutation (there was no consensus sequence made) equal to -1 so it is clear that there is no coverage.
-  mut4[, apply(mut4, 2, function(x) all(x == 0))] <- -1
-  mut5 <- linearize(mut4)
-  
-  # Determine if the specified position for each of the samples had no coverage.
-  mut5 <- check_coverage(mut5,mut3_no_cov,sam1)
-  
-  # Specify the order of the variables, displayed in the order of positions.
-  index <- mut3[ , which(names(mut3) %in% c('POS','mutation'))]
-  index <- index[order(index$POS, decreasing = FALSE),]
-  index <- index[!duplicated(index),]
-  # index$POS[length(index$POS)-1] <- index$POS[(length(index$POS)-2)] + 2
-  # index$POS[length(index$POS)] <- index$POS[(length(index$POS)-2)] + 1
-  index <- index[order(index$POS, decreasing = TRUE),]
-  levels_factor <- index$mutation
-  mut5$dim1 <- factor(mut5$dim1,levels = levels_factor)
-  
-  # Format the names correctly.
-  mut6 <- mut5
-  mut6$group <- gsub("_.*","",mut6$dim2)
-  mut6$dim2 <- gsub(".*_","",mut6$dim2)
-  
-  # Add the sample type to the plot.
-  type_num <- get_type_num(met2)
-  prop_samp <- 0.02
-  # mut6 <- get_sample_type(met2,mut4,mut6,sam1,type_num,prop_samp)
-  
-  # Make the days in the mutation table a factor.
-  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", unique(mut6$dim2), perl = TRUE))
-  factor_v <- sort(as.character(unique(mut6$dim2)))
-  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", factor_v, perl = TRUE))
-  mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
-  mut6$dim2 <- factor(mut6$dim2,levels = factor_v)
-  # mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
-  
-  # Save the intermediate mutation file
-  write.csv(mut4,paste0(dir_data,'/',prefix,'_mutation-table_',suffix,'.csv'))
-  
-  # Save the sample decoding file.
-  sam2 <- sam1
-  sam2$name <- gsub(".*_","",sam2$name)
-  # Make the days in the mutation table a factor.
-  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", unique(sam2$name), perl = TRUE))
-  factor_v <- sort(as.character(unique(sam2$name)))
-  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", factor_v, perl = TRUE))
-  sam2$name <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "",sam2$name, perl = TRUE))
-  sam2$name <- factor(sam2$name,levels = factor_v)
-  write.csv(sam2,paste0(dir_data,'/',prefix,'_sample-vsp-replicates_',suffix,'.csv'),row.names = F)
-  
-  return(mut6)
-}
-
-# Function for logistic regression for mutations for a given subject.
+# Function for regression for mutations for a given subject.
 # get_regression_plots(mut6,prefix,suffix)
 get_regression_plots <- function(df,prefix,suffix,min_change,max_mut){
   # Add a new column called 'dayss' that contains only the numbers from the 'dim2' column
@@ -968,71 +493,6 @@ get_regression_plots_large_groups <- function(df,prefix,suffix,min_change,max_mu
   return(stat1)
 }
 
-# Function to get the mutations in a standard format
-get_mutation <- function(mut_df){
-  
-  mut_df$protein_product <- NA
-  # Assign the protein product
-  pro1 <- seq(1:29903)
-  col <- c('POS', 'protein_product')
-  pro2 <- data.frame(matrix(NA, nrow = length(pro1), ncol = length(col)))
-  colnames(pro2) <- col
-  pro2$POS <- pro1
-  pro2$protein_product <- 'intergenic'
-  
-  for(jj in 1:length(pro2$POS)){
-    if(pro2$POS[jj] >= 266 && pro2$POS[jj] < 805){pro2$protein_product[jj] <- "nsp1"}
-    if(pro2$POS[jj] >= 806 && pro2$POS[jj] < 2719){pro2$protein_product[jj] <- "nsp2"}
-    if(pro2$POS[jj] >= 2720 && pro2$POS[jj] < 8554){pro2$protein_product[jj] <- "nsp3"}
-    if(pro2$POS[jj] >= 8555 && pro2$POS[jj] < 10054){pro2$protein_product[jj] <- "nsp4"}
-    if(pro2$POS[jj] >= 10055 && pro2$POS[jj] < 10972){pro2$protein_product[jj] <- "nsp5 (3CL-PRO)"}
-    if(pro2$POS[jj] >= 10973 && pro2$POS[jj] < 11842){pro2$protein_product[jj] <- "nsp6"}
-    if(pro2$POS[jj] >= 11843 && pro2$POS[jj] < 12091){pro2$protein_product[jj] <- "nsp7"}
-    if(pro2$POS[jj] >= 12092 && pro2$POS[jj] < 12685){pro2$protein_product[jj] <- "nsp8"}
-    if(pro2$POS[jj] >= 12686 && pro2$POS[jj] < 13024){pro2$protein_product[jj] <- "nsp9"}
-    if(pro2$POS[jj] >= 13025 && pro2$POS[jj] < 13441){pro2$protein_product[jj] <- "nsp10"}
-    if(pro2$POS[jj] >= 13442 && pro2$POS[jj] < 16236){pro2$protein_product[jj] <- "nsp12 (RdRp)"}
-    if(pro2$POS[jj] >= 16237 && pro2$POS[jj] < 18039){pro2$protein_product[jj] <- "nsp13 (Hel)"}
-    if(pro2$POS[jj] >= 18040 && pro2$POS[jj] < 19620){pro2$protein_product[jj] <- "nsp14 (ExoN)"}
-    if(pro2$POS[jj] >= 19621 && pro2$POS[jj] < 20658){pro2$protein_product[jj] <- "nsp15 (EndoU)"}
-    if(pro2$POS[jj] >= 20659 && pro2$POS[jj] < 21552){pro2$protein_product[jj] <- "nsp16 (2'-O-MT)"}
-    if(pro2$POS[jj] >= 21563 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "spike"}
-    # if(pro2$POS[jj] >= 21599 && pro2$POS[jj] < 23617){pro2$protein_product[jj] <- "S1"}
-    # if(pro2$POS[jj] >= 23618 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "S2"}
-    if(pro2$POS[jj] >= 25393 && pro2$POS[jj] < 26217){pro2$protein_product[jj] <- "ORF3a"}
-    if(pro2$POS[jj] >= 26245 && pro2$POS[jj] < 26469){pro2$protein_product[jj] <- "envelope"}
-    if(pro2$POS[jj] >= 26523 && pro2$POS[jj] < 27188){pro2$protein_product[jj] <- "membrane"}
-    if(pro2$POS[jj] >= 27202 && pro2$POS[jj] < 27384){pro2$protein_product[jj] <- "ORF6"}
-    if(pro2$POS[jj] >= 27439 && pro2$POS[jj] < 27756){pro2$protein_product[jj] <- "ORF7a"}
-    if(pro2$POS[jj] >= 27756 && pro2$POS[jj] < 27884){pro2$protein_product[jj] <- "ORF7b"}
-    if(pro2$POS[jj] >= 27939 && pro2$POS[jj] < 28256){pro2$protein_product[jj] <- "ORF8"}
-    if(pro2$POS[jj] >= 28274 && pro2$POS[jj] < 29530){pro2$protein_product[jj] <- "nucleocapsid"}
-    if(pro2$POS[jj] >= 29558 && pro2$POS[jj] < 29671){pro2$protein_product[jj] <- "ORF10"}
-  }
-  
-  
-  # Assign the data to be found in the table.
-  pro_tab <- pro2$protein_product
-  # Give the data names.
-  names(pro_tab) <- pro2$POS
-  # Search a vector of names and outputs the associated data.
-  mut_df$protein_product <- pro_tab[mut_df$POS]
-  
-  # Assign the nucleotide mutation for all of the groups.
-  mut_df$nt_mutation <- paste0(mut_df$REF,mut_df$POS,mut_df$ALT)
-  
-  
-  # Determine the aa mutation
-  mut_df$mutation <- paste0(mut_df$protein_product,'_',mut_df$type,'_',mut_df$REF, as.character(mut_df$POS),mut_df$ALT)
-  # Clean up the mutations.
-  for(ii in 1:length(mut_df$VSP)){
-    if(grepl('intergenic',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_',mut_df$REF[ii], as.character(mut_df$POS[ii]),mut_df$ALT[ii])}
-    if(grepl('del',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_del_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
-    if(grepl('ins',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_ins_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
-  }
-  return(mut_df)
-}
-                            
 # Function to save the summary plots for the analysis.
 # results <- get_raw_time_plots(mut6,dir_data,min_change,10)
 get_raw_time_plots <- function(df_summ, dir_data, min_change, max_mut, color_palette = c("#F2C57C","#240B36","#92140C","#748386","#EF6F6C")) {
@@ -1183,6 +643,547 @@ get_raw_time_plots <- function(df_summ, dir_data, min_change, max_mut, color_pal
   return(results)
 }
 
+
+# Function to get the mutations in a standard format
+get_mutation <- function(mut_df){
+  
+  mut_df$protein_product <- NA
+  # Assign the protein product
+  pro1 <- seq(1:29903)
+  col <- c('POS', 'protein_product')
+  pro2 <- data.frame(matrix(NA, nrow = length(pro1), ncol = length(col)))
+  colnames(pro2) <- col
+  pro2$POS <- pro1
+  pro2$protein_product <- 'intergenic'
+  
+  for(jj in 1:length(pro2$POS)){
+    if(pro2$POS[jj] >= 266 && pro2$POS[jj] < 805){pro2$protein_product[jj] <- "nsp1"}
+    if(pro2$POS[jj] >= 806 && pro2$POS[jj] < 2719){pro2$protein_product[jj] <- "nsp2"}
+    if(pro2$POS[jj] >= 2720 && pro2$POS[jj] < 8554){pro2$protein_product[jj] <- "nsp3"}
+    if(pro2$POS[jj] >= 8555 && pro2$POS[jj] < 10054){pro2$protein_product[jj] <- "nsp4"}
+    if(pro2$POS[jj] >= 10055 && pro2$POS[jj] < 10972){pro2$protein_product[jj] <- "nsp5 (3CL-PRO)"}
+    if(pro2$POS[jj] >= 10973 && pro2$POS[jj] < 11842){pro2$protein_product[jj] <- "nsp6"}
+    if(pro2$POS[jj] >= 11843 && pro2$POS[jj] < 12091){pro2$protein_product[jj] <- "nsp7"}
+    if(pro2$POS[jj] >= 12092 && pro2$POS[jj] < 12685){pro2$protein_product[jj] <- "nsp8"}
+    if(pro2$POS[jj] >= 12686 && pro2$POS[jj] < 13024){pro2$protein_product[jj] <- "nsp9"}
+    if(pro2$POS[jj] >= 13025 && pro2$POS[jj] < 13441){pro2$protein_product[jj] <- "nsp10"}
+    if(pro2$POS[jj] >= 13442 && pro2$POS[jj] < 16236){pro2$protein_product[jj] <- "nsp12 (RdRp)"}
+    if(pro2$POS[jj] >= 16237 && pro2$POS[jj] < 18039){pro2$protein_product[jj] <- "nsp13 (Hel)"}
+    if(pro2$POS[jj] >= 18040 && pro2$POS[jj] < 19620){pro2$protein_product[jj] <- "nsp14 (ExoN)"}
+    if(pro2$POS[jj] >= 19621 && pro2$POS[jj] < 20658){pro2$protein_product[jj] <- "nsp15 (EndoU)"}
+    if(pro2$POS[jj] >= 20659 && pro2$POS[jj] < 21552){pro2$protein_product[jj] <- "nsp16 (2'-O-MT)"}
+    if(pro2$POS[jj] >= 21563 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "spike"}
+    # if(pro2$POS[jj] >= 21599 && pro2$POS[jj] < 23617){pro2$protein_product[jj] <- "S1"}
+    # if(pro2$POS[jj] >= 23618 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "S2"}
+    if(pro2$POS[jj] >= 25393 && pro2$POS[jj] < 26217){pro2$protein_product[jj] <- "ORF3a"}
+    if(pro2$POS[jj] >= 26245 && pro2$POS[jj] < 26469){pro2$protein_product[jj] <- "envelope"}
+    if(pro2$POS[jj] >= 26523 && pro2$POS[jj] < 27188){pro2$protein_product[jj] <- "membrane"}
+    if(pro2$POS[jj] >= 27202 && pro2$POS[jj] < 27384){pro2$protein_product[jj] <- "ORF6"}
+    if(pro2$POS[jj] >= 27439 && pro2$POS[jj] < 27756){pro2$protein_product[jj] <- "ORF7a"}
+    if(pro2$POS[jj] >= 27756 && pro2$POS[jj] < 27884){pro2$protein_product[jj] <- "ORF7b"}
+    if(pro2$POS[jj] >= 27939 && pro2$POS[jj] < 28256){pro2$protein_product[jj] <- "ORF8"}
+    if(pro2$POS[jj] >= 28274 && pro2$POS[jj] < 29530){pro2$protein_product[jj] <- "nucleocapsid"}
+    if(pro2$POS[jj] >= 29558 && pro2$POS[jj] < 29671){pro2$protein_product[jj] <- "ORF10"}
+  }
+  
+  
+  # Assign the data to be found in the table.
+  pro_tab <- pro2$protein_product
+  # Give the data names.
+  names(pro_tab) <- pro2$POS
+  # Search a vector of names and outputs the associated data.
+  mut_df$protein_product <- pro_tab[mut_df$POS]
+  
+  # Assign the nucleotide mutation for all of the groups.
+  mut_df$nt_mutation <- paste0(mut_df$REF,mut_df$POS,mut_df$ALT)
+  
+  
+  # Determine the aa mutation
+  mut_df$mutation <- paste0(mut_df$protein_product,'_',mut_df$type,'_',mut_df$REF, as.character(mut_df$POS),mut_df$ALT)
+  # Clean up the mutations.
+  for(ii in 1:length(mut_df$VSP)){
+    if(grepl('intergenic',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_',mut_df$REF[ii], as.character(mut_df$POS[ii]),mut_df$ALT[ii])}
+    if(grepl('del',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_del_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
+    if(grepl('ins',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_ins_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
+  }
+  return(mut_df)
+}
+
+# Function to make a dataframe that is a x b into one that is a*b long (square data frame to list data frame).
+linearize <- function(data_frame){
+  r <- rownames(data_frame)
+  c <- colnames(data_frame)
+  
+  # Make a blank data frame.
+  col <- c('dim1','dim2', 'value')
+  linear <- data.frame(matrix(NA, nrow = length(r)*length(c), ncol = length(col)))
+  colnames(linear ) <- col
+  
+  x <- 1
+  y <- 1
+  for(i in 1:length(linear$dim1)){
+    linear$dim1[i] <- r[x]
+    linear$dim2[i] <- c[y]
+    linear$value[i] <- data_frame[x,y]
+    y <- y + 1
+    if(y > length(c)){
+      y <- 1
+      x <- x + 1
+    }
+  }
+  return(linear)
+}
+
+# Check if the position for a given sample had coverage.
+check_coverage <- function(mut5,mut3_no_cov,sam1){
+  mut_t <- mut5
+  col_t <- colnames(mut5) 
+  # mut3_no_cov <- mut3_no_cov[1:0, ] # This will remove the zero coverage for the plot.
+  
+  # Use lookup table to assign the name for the no coverage data frame.
+  # Assign the data to be found in the table.
+  lookup_tab <- sam1$name
+  # Give the data names.
+  names(lookup_tab) <- sam1$VSP
+  # Search a vector of names and outputs the associated data.
+  mut3_no_cov$name <- lookup_tab[mut3_no_cov$VSP]
+  
+  # Determine what positions are used in the mutation table
+  # Split each value in "dim1" by the underscore character
+  parts <- strsplit(mut_t$dim1, "_")
+  # Extract the last element of each list and remove all non-numeric characters
+  mut_t$alias <- paste0(mut_t$dim2,'_',as.character(sapply(parts, function(x) gsub("[^0-9]", "", x[[length(x)]]))))
+  
+  # Use a lookup table to determine if the position had no coverage.
+  mut3_no_cov$alias <- paste0(mut3_no_cov$name,'_',as.character(mut3_no_cov$POS))
+  # Assign the data to be found in the table.
+  lookup_cov <- rep(-1,length(mut3_no_cov$alias))
+  # Give the data names.
+  names(lookup_cov) <- mut3_no_cov$alias
+  # Search a vector of names and outputs the associated data.
+  mut3_no_cov$name <- lookup_cov[mut3_no_cov$VSP]
+  mut_t$temp <- lookup_cov[mut_t$alias]
+  # Check which rows have NA in the "temp" column
+  na_rows <- is.na(mut_t$temp)
+  # Overwrite the values in "value" with the values in "temp" for rows where "temp" is not NA
+  mut_t$value <- ifelse(!na_rows, mut_t$temp, mut_t$value)
+  
+  # Curate the data so that it is the same format that was put in.
+  mut_t <- mut_t[ , which(names(mut_t) %in% col_t)]
+}
+
+# Function to get a dataframe that has the sample type and numbers for converting in other functions.
+get_type_num <- function(met2){
+  samp_type_unique <- unique(met2$sample_type_tube)
+  # Make a blank data frame
+  col <- c('sample_type', 'num')
+  type_num <- data.frame(matrix(NA, nrow = length(samp_type_unique), ncol = length(col)))
+  colnames(type_num) <- col
+  type_num$sample_type <- samp_type_unique
+  type_num$num <- seq(1,length(samp_type_unique))
+  return(type_num)
+}
+
+# Function that retrieves the sample type and adds it to the data frame to be plotted.
+get_sample_type <- function(met2,mut4,mut6,sam1,type_num,prop_samp){
+  # # Go from the day data to the VSP data using a lookup table.
+  mut6$name <- paste0(mut6$group,'_',mut6$dim2)
+  # Make a lookup table to assign data to data frames more efficiently.
+  # Assign the data to be found in the table.
+  lookup_tab <- sam1$VSP
+  # Give the data names.
+  names(lookup_tab ) <- sam1$name
+  # Search a vector of names and outputs the associated data.
+  mut6$VSP <- lookup_tab[mut6$name]
+  
+  # Use a lookup table to get the sample type for each of the VSP
+  samp <- unique(mut6$name)
+  # Get xx number of rows to display the sampe data, for example, 2% would be .02
+  xx <- max(1,round(length(mut4[,1])*prop_samp)) # Doing the max here makes sure that there is at least a value of 1
+  samp_type_unique <- unique(met2$sample_type_tube)
+  
+  # Record the factors and temprarily make them characters.
+  df_levels <- levels(mut6$dim1)
+  mut6$dim1 <- as.character(mut6$dim1)
+  samp_type_rep <- paste0('samp_type','-',seq(1,xx))
+  blanks <- paste0('blank-',seq(1,xx))
+  df_levels <- c(samp_type_rep,blanks,df_levels)
+  
+  # Get a conversion for the sample types.
+  # Assign the data to be found in the table.
+  lookup_num <- type_num$num
+  # Give the data names.
+  names(lookup_num) <- type_num$sample_type
+  
+  for(ii in 1:length(samp)){
+    col <- colnames(mut6)
+    temp <- data.frame(matrix(NA, nrow = xx, ncol = length(col)))
+    colnames(temp) <- col
+    temp2 <- subset(mut6, mut6$name == samp[ii])
+    samp_vsp <- temp2$VSP[1]
+    samp_type <- subset(met2,met2$VSP == samp_vsp)
+    samp_type <- samp_type$sample_type_tube[1]
+    
+    # Populate the data frame with sample types.
+    temp$dim1 <- paste0(rep('samp_type',xx),'-',seq(1,xx))
+    temp$dim2 <- temp2$dim2[1]
+    temp$group <- temp2$group[1]
+    temp$value <- (lookup_num[samp_type] + 2)*-1
+    
+    # Add the blank lines.
+    temp_b <- temp
+    temp_b$dim1 <- paste0('blank-',seq(1,xx))
+    temp_b$value <- -1
+    
+    # Add it to the existing data frame.
+    mut6 <- rbind(mut6,temp,temp_b)
+  }
+  
+  # Return the dim1 column back to a factor with the correct levels.
+  mut6$dim1 <- factor(mut6$dim1,levels = df_levels)
+  
+  
+  # Remove any columns that shouldn't be there.
+  mut6 <- mut6[ , which(names(mut6) %in% c('dim1','dim2','group','value'))]
+  return(mut6)
+}
+
+# Function to get the gradient legend for the mutation heatmap.
+get_gradient_legend <- function() {
+  # Create a dummy data frame
+  df <- data.frame(x = c(0, 1), y = c(0, 1))
+  
+  # Plot
+  plot_legend <- ggplot(df, aes(x = x, y = y)) + 
+    geom_tile(aes(fill = x), height = 1, width = 1) + 
+    scale_fill_gradientn(colors = c("lightblue", "darkblue"), 
+                         name = "iSNV Proportion", 
+                         breaks = c(0, 0.25, 0.5, 0.75, 1),
+                         labels = c("0", "0.25", "0.5", "0.75", "1"),
+                         guide = guide_colorbar(ticks = FALSE)) +  # Removing ticks
+    theme_minimal() + 
+    theme(axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          panel.grid = element_blank(),
+          legend.position = "right",
+          legend.key.width = unit(1, "cm")) +
+    labs(x = NULL, y = NULL)
+  # Save the plot to a PDF
+  ggsave(filename = paste0(dir_data,'/', prefix,'_heatmap-legend_',suffix,'.pdf'), plot = plot_legend, device = "pdf", width = 7, height = 5)
+  
+}
+
+# Function to get the sample type legend for the mutation heatmap.
+get_legend <- function(colors, labels){
+  # Check that the inputs are of the correct length
+  if (length(colors) != length(labels)) {
+    stop("Error: the lists 'colors' and 'labels' must have the same length.")
+  }
+  
+  # Create a blank plot
+  plot <- ggplot()
+  
+  # Add a dummy layer to the plot
+  plot <- plot + 
+    geom_point(aes(x = 1, y = 1, color = labels, fill = labels), 
+               size = 10, shape = 15, stroke = 1)
+  
+  # Add a legend to the plot
+  plot <- plot + 
+    scale_color_manual(values = colors, name = "Sample Type", labels = labels) +
+    scale_fill_manual(values = colors, name = "Sample Type", labels = labels)
+  
+  # Remove the axis labels and tick marks
+  plot <- plot + 
+    theme(axis.title = element_blank(), 
+          axis.text = element_blank(), 
+          axis.ticks = element_blank())
+  
+  plot
+  return(plot)
+}
+
+
+# Function to make the heatmap.
+get_heatmap <- function(met0,mut1,prefix,subj_all,dir_data){
+  # get_heatmap(met0,mut1,prefix3,subj3,dir_data)
+  # Make a blank that all the plots are saved to.
+  plot_list <- list()
+  
+  # Iterate through each of the subjects.
+  for(ss in 1:length(subj_all)){
+    # Record how long it takes for each sample. 
+    start_time_seconds <- as.numeric(Sys.time())
+    
+    subj <- subj_all[ss]
+    print(paste0('Beginning ', subj),quote = F)
+    
+    # Look at only the samples are included in the project.
+    # met2 <- subset(met1, sample_included_in_study %in% c("yes", "poor coverage"))
+    met2 <- subset(met0,met0$study_id %in% subj)
+    mut2 <- subset(mut1, mut1$VSP %in% met2$VSP)
+    
+    # Extract the mutations that are present.
+    mut3 <- get_mutation(mut2)
+    dir.create(paste0(dir_data,'/'), showWarnings = FALSE)
+    write.csv(mut3,paste0(dir_data,'/',prefix,'_minor-variant-examples_',suffix,'.csv'),row.names = F)
+    
+    # Separate the positions with no coverage from those with coverage.
+    mut3_no_cov <- subset(mut3,mut3$ALT == 'N')
+    mut3 <- subset(mut3,mut3$ALT != 'N')
+    
+    # Get the sample data frame set up.
+    col <- c('VSP', 'passage','replicate','host','type')
+    sam1 <- data.frame(matrix(NA, nrow = length(unique(met2$VSP)), ncol = length(col)))
+    colnames(sam1) <- col
+    sam1$VSP <- met2$VSP
+    sam1$passage <- met2$days_since_symptom_onset
+    sam1$host <- met2$study_id
+    sam1 <- sam1[order(sam1$passage, decreasing = FALSE),]
+    
+    # Format the sample sheet.
+    # sam1$name <- paste0(sam1$VSP,'_', sam1$host,'_Day ',as.character(sprintf("%02d",as.numeric(sam1$passage))))
+    
+    # Combine the values in the "host" and "passage" columns XXX
+    sam1$name <- paste(sam1$host,'_',sam1$VSP,' Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
+    sam1$name <- paste(sam1$host,'_','Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
+    
+    # Add suffixes to the "name" column for duplicate rows
+    sam1$name <- ave(sam1$name, sam1$name, FUN = function(x) {
+      if(length(x) > 1) {
+        suffix <- paste(".", letters[1:length(x)], sep="")
+        return(paste(x, suffix, sep=""))
+      } else {
+        return(x)
+      }
+    })
+    
+    # Populate the data frame to be plotted.
+    col <- sam1$name
+    row <- unique(mut3$mutation)
+    mut4 <- data.frame(matrix(0, nrow = length(row), ncol = length(col)))
+    colnames(mut4) <- col
+    rownames(mut4) <- row
+    for(ii in 1:length(col)){
+      for(jj in 1:length(row)){
+        t1 <- col[ii]
+        hold <- subset(sam1,sam1$name == t1)
+        t1 <- hold$VSP[1]
+        t2 <- row[jj]
+        temp <- subset(mut3,mut3$VSP == t1)
+        temp <- subset(temp,temp$mutation == t2)
+        if(length(temp$VSP > 0)){
+          mut4[jj,ii] <- temp$percentAlt[1]
+        }
+      }
+    }
+    
+    # Make columns where there is no mutation (there was no consensus sequence made) equal to -1 so it is clear that there is no coverage.
+    mut4[, apply(mut4, 2, function(x) all(x == 0))] <- -1
+    
+    # Remove the rows where the mutation proption is 1 for all timepoints.
+    mut4 <- mut4[rowSums(mut4 >= 0.90) < ncol(mut4), ]
+    
+    mut5 <- linearize(mut4)
+    
+    # Determine if the specified position for each of the samples had no coverage.
+    mut5 <- check_coverage(mut5,mut3_no_cov,sam1)
+    
+    # Specify the order of the variables, displayed in the order of positions.
+    index <- mut3[ , which(names(mut3) %in% c('POS','mutation'))]
+    index <- index[order(index$POS, decreasing = FALSE),]
+    index <- index[!duplicated(index),]
+    # index$POS[length(index$POS)-1] <- index$POS[(length(index$POS)-2)] + 2
+    # index$POS[length(index$POS)] <- index$POS[(length(index$POS)-2)] + 1
+    index <- index[order(index$POS, decreasing = TRUE),]
+    levels_factor <- index$mutation
+    mut5$dim1 <- factor(mut5$dim1,levels = levels_factor)
+    
+    # Format the names correctly.
+    mut6 <- mut5
+    mut6$group <- gsub("_.*","",mut6$dim2)
+    mut6$dim2 <- gsub(".*_","",mut6$dim2)
+    
+    # # Add the sample type to the plot.
+    # type_num <- get_type_num(met2)
+    # prop_samp <- 0.02
+    # mut6 <- get_sample_type(met2,mut4,mut6,sam1,type_num,prop_samp)
+    
+    # Make the days in the mutation table a factor.
+    factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", unique(mut6$dim2), perl = TRUE))
+    factor_v <- sort(as.character(unique(mut6$dim2)))
+    factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", factor_v, perl = TRUE))
+    mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
+    mut6$dim2 <- factor(mut6$dim2,levels = factor_v)
+    # mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
+    
+    # Make the heatmap
+    p_cols <- c("#693a01","#9e5600",   "#ffd6a6","#bfaf9b",'white','lightblue', 'darkblue')
+    p_resc <- c(-5,-4,-3,-2,-1,0, 1)
+    
+    # For those plots without sample type.
+    p_cols <- c('lightblue', 'darkblue')
+    p_resc <- c(0, 1)
+    
+    # If there are no "no coverage" mutations, then just us light blue or dark blue.
+    if(min(mut6$value) < 0){
+      p_cols <- c('white','lightblue', 'darkblue')
+      p_resc <- c(-1,0, 1)
+    }
+    
+    heatmap_plot <- ggplot(data = mut6, aes(x=dim2, y=dim1)) +
+      facet_grid(~group, scales = "free") +
+      geom_tile(aes(fill = value)) + theme(plot.title = element_text(hjust = 0.5), axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(), axis.line = element_line(colour = "black"), legend.position = "none") +
+      xlab('') + ylab('') + labs(fill = "Proportion") + ggtitle("") +
+      scale_fill_gradientn(
+        # colours=c('grey','white', '#c2e7fc'),
+        #colours=c("#693a01","#9e5600","#ffae4f","#ffd6a6","#bfaf9b",'white','lightblue', 'darkblue'),
+        colours=p_cols,
+        # colours=c('lightblue', 'darkblue'),
+        values=scales::rescale(p_resc),
+        guide="colorbar")+
+      theme(axis.text.y=element_blank(),
+            axis.ticks.y=element_blank() 
+      )
+    
+    # Add the plot to the list
+    plot_list[[ss]] <- heatmap_plot
+    
+    # Report back the progress going through this loop.
+    end_time_seconds <- as.numeric(Sys.time())
+    print(paste0('Completed ', subj,'     Seconds: ',as.character(round(end_time_seconds - start_time_seconds),2)),quote = F)
+    print('',quote = F)
+  }
+  
+  # Save all the plots in a single PDF
+  pdf(paste0(dir_data,'/', prefix,'_mutation-heatmap_',suffix,'.pdf'), width = ceiling(ss)*1.8, height = ceiling(ss)*2)
+  gridExtra::grid.arrange(grobs = plot_list, ncol = ceiling(ss/2))
+  dev.off()
+  desired_height <- 100
+  pdf(paste0(dir_data,'/', prefix,'_mutation-heatmap-paper_',suffix,'.pdf'), width = 375/25.4, height = desired_height/25.4)  # 25.4 mm per inch
+  gridExtra::grid.arrange(grobs = plot_list, ncol = length(plot_list))
+  dev.off()
+  return(mut6)
+}
+
+# Function to get the mut6 data frame that has all the data sorted.
+get_mut6 <- function(met0,mut1,prefix,subj,dir_data){
+  
+  # prefix <- prefix3
+  # subj <- subj3
+  
+  # Look at only the samples are included in the project.
+  # met2 <- subset(met1, sample_included_in_study %in% c("yes", "poor coverage"))
+  met2 <- subset(met0,met0$study_id %in% subj)
+  mut2 <- subset(mut1, mut1$VSP %in% met2$VSP)
+  
+  # Extract the mutations that are present.
+  mut3 <- get_mutation(mut2)
+  dir.create(paste0(dir_data,'/'), showWarnings = FALSE)
+  write.csv(mut3,paste0(dir_data,'/',prefix,'_minor-variant-examples_',suffix,'.csv'),row.names = F)
+  
+  # Separate the positions with no coverage from those with coverage.
+  mut3_no_cov <- subset(mut3,mut3$ALT == 'N')
+  mut3 <- subset(mut3,mut3$ALT != 'N')
+  
+  # Get the sample data frame set up.
+  col <- c('VSP', 'passage','replicate','host','type')
+  sam1 <- data.frame(matrix(NA, nrow = length(unique(met2$VSP)), ncol = length(col)))
+  colnames(sam1) <- col
+  sam1$VSP <- met2$VSP
+  sam1$passage <- met2$days_since_symptom_onset
+  sam1$host <- met2$study_id
+  sam1 <- sam1[order(sam1$passage, decreasing = FALSE),]
+  
+  # Format the sample sheet.
+  # sam1$name <- paste0(sam1$VSP,'_', sam1$host,'_Day ',as.character(sprintf("%02d",as.numeric(sam1$passage))))
+  
+  # Combine the values in the "host" and "passage" columns XXX
+  sam1$name <- paste(sam1$host,'_',sam1$VSP,' Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
+  sam1$name <- paste(sam1$host,'_','Day ',as.character(formatC(as.numeric(sam1$passage), width = 3, format = "d", flag = "0")))
+  
+  # Add suffixes to the "name" column for duplicate rows
+  sam1$name <- ave(sam1$name, sam1$name, FUN = function(x) {
+    if(length(x) > 1) {
+      suffix <- paste(".", letters[1:length(x)], sep="")
+      return(paste(x, suffix, sep=""))
+    } else {
+      return(x)
+    }
+  })
+  
+  # Populate the data frame to be plotted.
+  col <- sam1$name
+  row <- unique(mut3$mutation)
+  mut4 <- data.frame(matrix(0, nrow = length(row), ncol = length(col)))
+  colnames(mut4) <- col
+  rownames(mut4) <- row
+  for(ii in 1:length(col)){
+    for(jj in 1:length(row)){
+      t1 <- col[ii]
+      hold <- subset(sam1,sam1$name == t1)
+      t1 <- hold$VSP[1]
+      t2 <- row[jj]
+      temp <- subset(mut3,mut3$VSP == t1)
+      temp <- subset(temp,temp$mutation == t2)
+      if(length(temp$VSP > 0)){
+        mut4[jj,ii] <- temp$percentAlt[1]
+      }
+    }
+  }
+  
+  # Make columns where there is no mutation (there was no consensus sequence made) equal to -1 so it is clear that there is no coverage.
+  mut4[, apply(mut4, 2, function(x) all(x == 0))] <- -1
+  mut5 <- linearize(mut4)
+  
+  # Determine if the specified position for each of the samples had no coverage.
+  mut5 <- check_coverage(mut5,mut3_no_cov,sam1)
+  
+  # Specify the order of the variables, displayed in the order of positions.
+  index <- mut3[ , which(names(mut3) %in% c('POS','mutation'))]
+  index <- index[order(index$POS, decreasing = FALSE),]
+  index <- index[!duplicated(index),]
+  # index$POS[length(index$POS)-1] <- index$POS[(length(index$POS)-2)] + 2
+  # index$POS[length(index$POS)] <- index$POS[(length(index$POS)-2)] + 1
+  index <- index[order(index$POS, decreasing = TRUE),]
+  levels_factor <- index$mutation
+  mut5$dim1 <- factor(mut5$dim1,levels = levels_factor)
+  
+  # Format the names correctly.
+  mut6 <- mut5
+  mut6$group <- gsub("_.*","",mut6$dim2)
+  mut6$dim2 <- gsub(".*_","",mut6$dim2)
+  
+  # Add the sample type to the plot.
+  type_num <- get_type_num(met2)
+  prop_samp <- 0.02
+  # mut6 <- get_sample_type(met2,mut4,mut6,sam1,type_num,prop_samp)
+  
+  # Make the days in the mutation table a factor.
+  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", unique(mut6$dim2), perl = TRUE))
+  factor_v <- sort(as.character(unique(mut6$dim2)))
+  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", factor_v, perl = TRUE))
+  mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
+  mut6$dim2 <- factor(mut6$dim2,levels = factor_v)
+  # mut6$dim2 <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", mut6$dim2, perl = TRUE))
+  
+  # Save the intermediate mutation file
+  write.csv(mut4,paste0(dir_data,'/',prefix,'_mutation-table_',suffix,'.csv'))
+  
+  # Save the sample decoding file.
+  sam2 <- sam1
+  sam2$name <- gsub(".*_","",sam2$name)
+  # Make the days in the mutation table a factor.
+  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", unique(sam2$name), perl = TRUE))
+  factor_v <- sort(as.character(unique(sam2$name)))
+  factor_v <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "", factor_v, perl = TRUE))
+  sam2$name <- gsub('000','0',gsub("(?<=\\s)0+(?=[1-9])", "",sam2$name, perl = TRUE))
+  sam2$name <- factor(sam2$name,levels = factor_v)
+  write.csv(sam2,paste0(dir_data,'/',prefix,'_sample-vsp-replicates_',suffix,'.csv'),row.names = F)
+  
+  return(mut6)
+}
 
 # Function to get plot that has mutation on the x axis, proportion on the y axis, grouped by mutation and colored by day.
 get_variability_plots <- function(mut6){
