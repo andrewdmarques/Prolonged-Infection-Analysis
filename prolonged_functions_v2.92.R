@@ -15,71 +15,6 @@ library('ggridges')
 # Define Functions
 ################################################################################
 
-# Function to get the mutations in a standard format
-get_mutation <- function(mut_df){
-  
-  mut_df$protein_product <- NA
-  # Assign the protein product
-  pro1 <- seq(1:29903)
-  col <- c('POS', 'protein_product')
-  pro2 <- data.frame(matrix(NA, nrow = length(pro1), ncol = length(col)))
-  colnames(pro2) <- col
-  pro2$POS <- pro1
-  pro2$protein_product <- 'intergenic'
-  
-  for(jj in 1:length(pro2$POS)){
-    if(pro2$POS[jj] >= 266 && pro2$POS[jj] < 805){pro2$protein_product[jj] <- "nsp1"}
-    if(pro2$POS[jj] >= 806 && pro2$POS[jj] < 2719){pro2$protein_product[jj] <- "nsp2"}
-    if(pro2$POS[jj] >= 2720 && pro2$POS[jj] < 8554){pro2$protein_product[jj] <- "nsp3"}
-    if(pro2$POS[jj] >= 8555 && pro2$POS[jj] < 10054){pro2$protein_product[jj] <- "nsp4"}
-    if(pro2$POS[jj] >= 10055 && pro2$POS[jj] < 10972){pro2$protein_product[jj] <- "nsp5 (3CL-PRO)"}
-    if(pro2$POS[jj] >= 10973 && pro2$POS[jj] < 11842){pro2$protein_product[jj] <- "nsp6"}
-    if(pro2$POS[jj] >= 11843 && pro2$POS[jj] < 12091){pro2$protein_product[jj] <- "nsp7"}
-    if(pro2$POS[jj] >= 12092 && pro2$POS[jj] < 12685){pro2$protein_product[jj] <- "nsp8"}
-    if(pro2$POS[jj] >= 12686 && pro2$POS[jj] < 13024){pro2$protein_product[jj] <- "nsp9"}
-    if(pro2$POS[jj] >= 13025 && pro2$POS[jj] < 13441){pro2$protein_product[jj] <- "nsp10"}
-    if(pro2$POS[jj] >= 13442 && pro2$POS[jj] < 16236){pro2$protein_product[jj] <- "nsp12 (RdRp)"}
-    if(pro2$POS[jj] >= 16237 && pro2$POS[jj] < 18039){pro2$protein_product[jj] <- "nsp13 (Hel)"}
-    if(pro2$POS[jj] >= 18040 && pro2$POS[jj] < 19620){pro2$protein_product[jj] <- "nsp14 (ExoN)"}
-    if(pro2$POS[jj] >= 19621 && pro2$POS[jj] < 20658){pro2$protein_product[jj] <- "nsp15 (EndoU)"}
-    if(pro2$POS[jj] >= 20659 && pro2$POS[jj] < 21552){pro2$protein_product[jj] <- "nsp16 (2'-O-MT)"}
-    if(pro2$POS[jj] >= 21563 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "spike"}
-    # if(pro2$POS[jj] >= 21599 && pro2$POS[jj] < 23617){pro2$protein_product[jj] <- "S1"}
-    # if(pro2$POS[jj] >= 23618 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "S2"}
-    if(pro2$POS[jj] >= 25393 && pro2$POS[jj] < 26217){pro2$protein_product[jj] <- "ORF3a"}
-    if(pro2$POS[jj] >= 26245 && pro2$POS[jj] < 26469){pro2$protein_product[jj] <- "envelope"}
-    if(pro2$POS[jj] >= 26523 && pro2$POS[jj] < 27188){pro2$protein_product[jj] <- "membrane"}
-    if(pro2$POS[jj] >= 27202 && pro2$POS[jj] < 27384){pro2$protein_product[jj] <- "ORF6"}
-    if(pro2$POS[jj] >= 27439 && pro2$POS[jj] < 27756){pro2$protein_product[jj] <- "ORF7a"}
-    if(pro2$POS[jj] >= 27756 && pro2$POS[jj] < 27884){pro2$protein_product[jj] <- "ORF7b"}
-    if(pro2$POS[jj] >= 27939 && pro2$POS[jj] < 28256){pro2$protein_product[jj] <- "ORF8"}
-    if(pro2$POS[jj] >= 28274 && pro2$POS[jj] < 29530){pro2$protein_product[jj] <- "nucleocapsid"}
-    if(pro2$POS[jj] >= 29558 && pro2$POS[jj] < 29671){pro2$protein_product[jj] <- "ORF10"}
-  }
-  
-  
-  # Assign the data to be found in the table.
-  pro_tab <- pro2$protein_product
-  # Give the data names.
-  names(pro_tab) <- pro2$POS
-  # Search a vector of names and outputs the associated data.
-  mut_df$protein_product <- pro_tab[mut_df$POS]
-  
-  # Assign the nucleotide mutation for all of the groups.
-  mut_df$nt_mutation <- paste0(mut_df$REF,mut_df$POS,mut_df$ALT)
-  
-  
-  # Determine the aa mutation
-  mut_df$mutation <- paste0(mut_df$protein_product,'_',mut_df$type,'_',mut_df$REF, as.character(mut_df$POS),mut_df$ALT)
-  # Clean up the mutations.
-  for(ii in 1:length(mut_df$VSP)){
-    if(grepl('intergenic',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_',mut_df$REF[ii], as.character(mut_df$POS[ii]),mut_df$ALT[ii])}
-    if(grepl('del',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_del_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
-    if(grepl('ins',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_ins_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
-  }
-  return(mut_df)
-}
-
 # Function to make a dataframe that is a x b into one that is a*b long (square data frame to list data frame).
 linearize <- function(data_frame){
   r <- rownames(data_frame)
@@ -1033,6 +968,71 @@ get_regression_plots_large_groups <- function(df,prefix,suffix,min_change,max_mu
   return(stat1)
 }
 
+# Function to get the mutations in a standard format
+get_mutation <- function(mut_df){
+  
+  mut_df$protein_product <- NA
+  # Assign the protein product
+  pro1 <- seq(1:29903)
+  col <- c('POS', 'protein_product')
+  pro2 <- data.frame(matrix(NA, nrow = length(pro1), ncol = length(col)))
+  colnames(pro2) <- col
+  pro2$POS <- pro1
+  pro2$protein_product <- 'intergenic'
+  
+  for(jj in 1:length(pro2$POS)){
+    if(pro2$POS[jj] >= 266 && pro2$POS[jj] < 805){pro2$protein_product[jj] <- "nsp1"}
+    if(pro2$POS[jj] >= 806 && pro2$POS[jj] < 2719){pro2$protein_product[jj] <- "nsp2"}
+    if(pro2$POS[jj] >= 2720 && pro2$POS[jj] < 8554){pro2$protein_product[jj] <- "nsp3"}
+    if(pro2$POS[jj] >= 8555 && pro2$POS[jj] < 10054){pro2$protein_product[jj] <- "nsp4"}
+    if(pro2$POS[jj] >= 10055 && pro2$POS[jj] < 10972){pro2$protein_product[jj] <- "nsp5 (3CL-PRO)"}
+    if(pro2$POS[jj] >= 10973 && pro2$POS[jj] < 11842){pro2$protein_product[jj] <- "nsp6"}
+    if(pro2$POS[jj] >= 11843 && pro2$POS[jj] < 12091){pro2$protein_product[jj] <- "nsp7"}
+    if(pro2$POS[jj] >= 12092 && pro2$POS[jj] < 12685){pro2$protein_product[jj] <- "nsp8"}
+    if(pro2$POS[jj] >= 12686 && pro2$POS[jj] < 13024){pro2$protein_product[jj] <- "nsp9"}
+    if(pro2$POS[jj] >= 13025 && pro2$POS[jj] < 13441){pro2$protein_product[jj] <- "nsp10"}
+    if(pro2$POS[jj] >= 13442 && pro2$POS[jj] < 16236){pro2$protein_product[jj] <- "nsp12 (RdRp)"}
+    if(pro2$POS[jj] >= 16237 && pro2$POS[jj] < 18039){pro2$protein_product[jj] <- "nsp13 (Hel)"}
+    if(pro2$POS[jj] >= 18040 && pro2$POS[jj] < 19620){pro2$protein_product[jj] <- "nsp14 (ExoN)"}
+    if(pro2$POS[jj] >= 19621 && pro2$POS[jj] < 20658){pro2$protein_product[jj] <- "nsp15 (EndoU)"}
+    if(pro2$POS[jj] >= 20659 && pro2$POS[jj] < 21552){pro2$protein_product[jj] <- "nsp16 (2'-O-MT)"}
+    if(pro2$POS[jj] >= 21563 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "spike"}
+    # if(pro2$POS[jj] >= 21599 && pro2$POS[jj] < 23617){pro2$protein_product[jj] <- "S1"}
+    # if(pro2$POS[jj] >= 23618 && pro2$POS[jj] < 25381){pro2$protein_product[jj] <- "S2"}
+    if(pro2$POS[jj] >= 25393 && pro2$POS[jj] < 26217){pro2$protein_product[jj] <- "ORF3a"}
+    if(pro2$POS[jj] >= 26245 && pro2$POS[jj] < 26469){pro2$protein_product[jj] <- "envelope"}
+    if(pro2$POS[jj] >= 26523 && pro2$POS[jj] < 27188){pro2$protein_product[jj] <- "membrane"}
+    if(pro2$POS[jj] >= 27202 && pro2$POS[jj] < 27384){pro2$protein_product[jj] <- "ORF6"}
+    if(pro2$POS[jj] >= 27439 && pro2$POS[jj] < 27756){pro2$protein_product[jj] <- "ORF7a"}
+    if(pro2$POS[jj] >= 27756 && pro2$POS[jj] < 27884){pro2$protein_product[jj] <- "ORF7b"}
+    if(pro2$POS[jj] >= 27939 && pro2$POS[jj] < 28256){pro2$protein_product[jj] <- "ORF8"}
+    if(pro2$POS[jj] >= 28274 && pro2$POS[jj] < 29530){pro2$protein_product[jj] <- "nucleocapsid"}
+    if(pro2$POS[jj] >= 29558 && pro2$POS[jj] < 29671){pro2$protein_product[jj] <- "ORF10"}
+  }
+  
+  
+  # Assign the data to be found in the table.
+  pro_tab <- pro2$protein_product
+  # Give the data names.
+  names(pro_tab) <- pro2$POS
+  # Search a vector of names and outputs the associated data.
+  mut_df$protein_product <- pro_tab[mut_df$POS]
+  
+  # Assign the nucleotide mutation for all of the groups.
+  mut_df$nt_mutation <- paste0(mut_df$REF,mut_df$POS,mut_df$ALT)
+  
+  
+  # Determine the aa mutation
+  mut_df$mutation <- paste0(mut_df$protein_product,'_',mut_df$type,'_',mut_df$REF, as.character(mut_df$POS),mut_df$ALT)
+  # Clean up the mutations.
+  for(ii in 1:length(mut_df$VSP)){
+    if(grepl('intergenic',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_',mut_df$REF[ii], as.character(mut_df$POS[ii]),mut_df$ALT[ii])}
+    if(grepl('del',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_del_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
+    if(grepl('ins',mut_df$mutation[ii])){mut_df$mutation[ii] <- paste0(mut_df$protein_product[ii],'_ins_',as.character(nchar(mut_df$ALT[ii])-3),'_',as.character(mut_df$POS[ii]))}
+  }
+  return(mut_df)
+}
+                            
 # Function to save the summary plots for the analysis.
 # results <- get_raw_time_plots(mut6,dir_data,min_change,10)
 get_raw_time_plots <- function(df_summ, dir_data, min_change, max_mut, color_palette = c("#F2C57C","#240B36","#92140C","#748386","#EF6F6C")) {
