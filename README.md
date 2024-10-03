@@ -1,7 +1,7 @@
 # Prolonged COVID Samples Analysis
 
 ## Description:
-This script performs an analysis on prolonged COVID samples. It processes raw mutation data, calculates statistical models, generates heatmaps, visualizes iSNV variability by subject, and produces daily pairwise genetic diversity metrics. The end goal is to determine how minor variants change over time and gain insights into prolonged COVID cases.
+This script performs an analysis on prolonged SARS-CoV-2 infection samples. It processes raw mutation data, calculates statistical models, generates heatmaps, visualizes iSNV variability by subject, and produces daily pairwise genetic diversity metrics. The end goal is to determine how minor variants change over time and gain insights into prolonged COVID cases.
 
 ## Dependencies:
 - R packages: `readxl`, `ggplot2`, `plotly`, `zoo`, `dplyr`, `ggrepel`, `tidyverse`, `ggridges`
